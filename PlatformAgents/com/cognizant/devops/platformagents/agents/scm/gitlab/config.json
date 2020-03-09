@@ -1,4 +1,10 @@
 {
+  "vault": {
+    "getFromVault": false,
+    "secretEngine": "insights-kv",
+    "readToken": "vault_secret_token",
+    "vaultUrl": "http://Vault_Host:port/v1/"
+  },
   "mqConfig": {
     "user": "iSight",
     "password": "iSight",
@@ -7,7 +13,8 @@
     "agentControlXchg": "iAgent"
   },
   "subscribe": {
-    "config": "SCM.GITLAB.config"
+    "config": "SCM.GITLAB.config",
+    "agentCtrlQueue": "InsightsGitLabAgent"
   },
   "publish": {
     "data": "SCM.GITLAB.DATA",
@@ -19,116 +26,112 @@
     "responseType": "JSON"
   },
   "dynamicTemplate": {
+    "timeFieldMapping": {
+      "startDate": "%Y-%m-%d",
+      "createdAt": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "updatedAt": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "closedAt": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "mergedAt": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "commitTime": "%Y-%m-%dT%H:%M:%S.",
+      "since": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "until": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "consumptionTime": "%Y-%m-%dT%H:%M:%SZ"
+    },
     "restrictedProjects": [
-      "projects_name"
+      "project1",
+      "project2",
+      "project3"
     ],
     "responseTemplate": {
       "id": "commitId",
-      "title": "title",
-      "created_at": "commitTime",
       "message": "message",
-      "committer_name": "committerName",
-      "committer_email": "committerEmail",
-      "author_email": "authorEmail"
+      "author_name": "authorName",
+      "committed_date": "commitTime"
     },
-    "responseTemplateMerge": {
-      "id": "Id",
-      "target_branch": "targetBranch",
-      "source_branch": "sourceBranch",
-      "project_id": "projectId",
-      "title": "name",
-      "state": "state",
+    "mergeReqResponseTemplate": {
+      "id": "mergeReqId",
+      "state": "mergeReqState",
+      "source_branch": "originBranch",
+      "sha": "headSHA",
+      "target_branch": "baseBranch",
+      "isForked": "isForked",
+      "originBranchJiraKeys": "originBranchJiraKeys",
+      "merge_commit_sha": "mergedSHA",
+      "commit": "commit",
+      "created_at": "createdAt",
       "updated_at": "updatedAt",
-      "author": {
-        "username": "author",
-        "id": "authorId"
-      },
-      "assignee": {
-        "username": "assignee"
-      }
+      "closed_at": "closedAt",
+      "merged_at": "mergedAt"
     },
-    "responseTemplateTag": {
-      "message": "message",
-      "name": "name",
-      "release": "release",
+    "orphanCommitResponseTemplate": {
+      "sha": "commitId",
       "commit": {
-        "message": "commitMessage",
-        "id": "tagCommitId",
-        "author_name": "commitName",
-        "committer_email": "commitEmail"
-      }
-    },
-    "relationMetadata": {
-      "relation": {
-        "properties": [
-          "commitId",
-          "projectName",
-          "projectId",
-          "branchName"
-        ],
-        "name": "BRANCH_HAS_COMMITS_GITLAB",
-        "source": {
-          "constraints": [
-            "commitId"
-          ]
-        },
-        "destination": {
-          "constraints": [
-            "branchName",
-            "projectName"
-          ]
+        "message": "message",
+        "author": {
+          "name": "authorName",
+          "date": "commitTime"
         }
       }
     },
-    "commitMetadata": {
-      "dataUpdateSupported": true,
-      "uniqueKey": [
-        "commitId"
-      ]
-    },
-    "tagMetadata": {
-      "labels": [
-        "TAG_GITLAB"
-      ]
-    },
-    "mergeMetadata": {
-      "labels": [
-        "MERGE_GITLAB"
-      ]
-    },
-    "branchDeleteMetadata": {
-      "labels": [
-        "METADATA"
-      ],
-      "dataUpdateSupported": true,
-      "uniqueKey": [
-        "branchName",
-        "projectName"
-      ]
+    "metaData": {
+      "branches": {
+        "dataUpdateSupported": true,
+        "uniqueKey": [
+          "projectPath",
+          "gitType"
+        ]
+      },
+      "mergeRequest": {
+        "dataUpdateSupported": true,
+        "uniqueKey": [
+          "projectPath",
+          "mergeReqId",
+          "gitType"
+        ]
+      },
+      "commits": {
+        "dataUpdateSupported": true,
+        "uniqueKey": [
+          "projectPath",
+          "commitId",
+          "gitType"
+        ]
+      },
+      "orphanCommits": {
+        "dataUpdateSupported": true,
+        "uniqueKey": [
+          "projectPath",
+          "branchName",
+          "commitId",
+          "gitType"
+        ]
+      }
     }
   },
-  "timeFieldMapping": {
-    "commitTime": "%Y-%m-%dT%H:%M:%S."
-  },
-  "agentId": "",
+  "agentId": "InsightsGitLabAgent",
   "enableBranches": true,
-  "enableMerge": false,
-  "enableGroup": true,
-  "enableCommitRelation": true,
-  "toolsTimeZone": "GMT",
-  "toolCategory": "SCM",
-  "insightsTimeZone": "Asia/Kolkata",
-  "useResponseTemplate": true,
+  "enableOptimizedDataRetrieval": true,
+  "enableBrancheDeletion": false,
   "enableDataValidation": true,
+  "toolCategory": "SCM",
+  "toolsTimeZone": "UTC",
+  "insightsTimeZone": "Asia/Kolkata",
+  "enableValueArray": false,
+  "useResponseTemplate": true,
   "auth": "base64",
   "runSchedule": 30,
   "timeStampField": "commitTime",
   "timeStampFormat": "%Y-%m-%dT%H:%M:%S.",
-  "startFrom": "2017-03-03 15:46:33",
-  "accessToken": "",
-  "getProjects": "",
+  "isEpochTimeFormat": false,
+  "startFrom": "2019-08-01 00:00:33",
+  "accessToken": "accessToken",
+  "getRepos": "getRepos",
+  "commitsBaseEndPoint": "commitsBaseEndPoint",
   "isDebugAllowed": false,
+  "toolName": "GITLAB",
   "loggingSetting": {
-    "logLevel": "WARN"
+    "logLevel": "ERROR",
+    "maxBytes": 5000000,
+    "backupCount": 1000
   }
 }
