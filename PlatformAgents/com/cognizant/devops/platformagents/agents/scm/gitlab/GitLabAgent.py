@@ -1,4 +1,4 @@
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Copyright 2017 Cognizant Technology Solutions
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,7 +12,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
 # License for the specific language governing permissions and limitations under
 # the License.
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 '''
 Re-Created on March 06, 2020
 @author: 658713
@@ -32,7 +32,7 @@ from ....core.BaseAgent import BaseAgent
 class GitLabAgent(BaseAgent):
     trackingCachePath = None
 
-    def process(self):        
+    def process(self):
         timeStampNow = lambda: dateTime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         getProjects = self.config.get("getRepos", '')
         accessToken = self.config.get("accessToken", '')
@@ -41,16 +41,17 @@ class GitLabAgent(BaseAgent):
         startFrom = parser.parse(startFromStr, ignoretz=True)
         getProjectsUrl = getProjects + "?access_token=" + accessToken
         enableBranches = self.config.get("enableBranches", False)
-        restricted_projects = self.config.get('dynamicTemplate', {}).get('restrictedProjects', None)        
+        restricted_projects = self.config.get('dynamicTemplate', {}).get('restrictedProjects', None)
         isOptimalDataCollect = self.config.get("enableOptimizedDataRetrieval", False)
         enableBrancheDeletion = self.config.get("enableBrancheDeletion", False)
+        filterbyGroups = self.config.get("filterbyGroups", '')
         self.setupTrackingCachePath('trackingCache')
         try:
-            projects = self.getResponse(getProjectsUrl + '&per_page=100&sort=asc&page=1', 'GET', None, None, None)        
+            projects = self.getResponse(getProjectsUrl + '&per_page=100&sort=asc&page=1', 'GET', None, None, None)
         except Exception as ex:
             self.publishHealthDataForExceptions(ex)
-            projects = []           
-            
+            projects = []
+
         responseTemplate = self.getResponseTemplate()
         dynamicTemplate = self.config.get('dynamicTemplate', {})
         metaData = dynamicTemplate.get('metaData', {})
@@ -63,7 +64,7 @@ class GitLabAgent(BaseAgent):
             "target_branch": "baseBranch"
         }
         mergeReqResponseTemplate = dynamicTemplate.get('mergeReqResponseTemplate', defMergeReqResTemplate)
-        
+
         projectPageNum = 1
         fetchNextPage = True
         while fetchNextPage:
@@ -73,175 +74,188 @@ class GitLabAgent(BaseAgent):
                 projectPath = project.get('path_with_namespace', '')
                 projectName = project.get('name', '')
                 projectId = project.get('id', '')
-                
-                encodedProjectName = urllib.quote_plus(projectPath)
-                if not os.path.isfile(self.trackingCachePath + projectPath + '.json'):
-                    self.updateTrackingCacheFile(projectPath, dict())
-                projectTrackingCache = self.loadTrackingCacheFile(projectPath)
-                projectDefaultBranch = project.get('default_branch', None)
-                commitDict = dict()
-                trackingDetails = self.tracking.get(projectPath, None)
-                if trackingDetails is None:
-                    trackingDetails = {}
-                    self.tracking[projectPath] = trackingDetails
-                projectUpdatedAt = project.get('last_activity_at', None)
-                projectUpdatedAt = parser.parse(projectUpdatedAt, ignoretz=True)
-                branch_from_tracking_json = []
-                for key in trackingDetails:
-                    if key != "projectModificationTime":
-                        branch_from_tracking_json.append(key)
-                if startFrom < projectUpdatedAt:
-                    trackingDetails['projectModificationTime'] = project.get('last_activity_at')
-                    branches = ['master']
-                    if projectDefaultBranch != 'master':
-                        branches.append(projectDefaultBranch)
-                    # Restricting projects with wrong branch names
-                    if projectName in restricted_projects:                       
-                       continue
-                      
-                    if projectPath:
-                        if enableBranches:
-                            if isOptimalDataCollect:
-                                self.retrieveMergeRequest(commitsBaseEndPoint, projectId, projectPath, encodedProjectName,
-                                                         projectDefaultBranch, accessToken,
-                                                         trackingDetails, projectTrackingCache, startFromStr,
-                                                         mergeReqMetaData,
-                                                         mergeReqResponseTemplate, commitsMetaData, responseTemplate)
-                                if 'commitDict' in projectTrackingCache:
-                                    commitDict = projectTrackingCache['commitDict']
-                            branches = []
-                            allBranches = []
-                            branchPage = 1
-                            fetchNextBranchPage = True
-                            while fetchNextBranchPage:
-                                getBranchesRestUrl = commitsBaseEndPoint + encodedProjectName + '/repository/branches?access_token=' + accessToken + '&page=' + str(branchPage)                                
-                                try:
-                                    branchDetails = self.getResponse(getBranchesRestUrl, 'GET', None, None, None)
-                                except Exception as ex:
-                                    self.publishHealthDataForExceptions(ex)
-                                    branchDetails = []                                    
-                                    pass 
-                                
-                                for branch in branchDetails:
-                                    branchName = branch['name']                                    
-                                    branchName = urllib.quote_plus(branchName)                                    
-                                    branchTrackingDetails = trackingDetails.get(branchName, {})
-                                    branchTracking = branchTrackingDetails.get('latestCommitId', None)
-                                    allBranches.append(branchName)
-                                    if branchTracking is None or branchTracking != branch.get('commit', {}).get('sha',
-                                                                                                                None):
-                                        branches.append(branchName)
-                                if len(branchDetails) == 30:
-                                    branchPage = branchPage + 1
-                                else:
-                                    break
-                            if len(branches) > 0:
-                                activeBranches = [
-                                    {'projectPath': projectPath, 'projectId': projectId, 'activeBranches': allBranches, 'gitType': 'metadata',
-                                     'consumptionTime': timeStampNow()}]                                
-                                self.publishToolsData(activeBranches, branchesMetaData)
-                        if enableBrancheDeletion:
-                            for key in branch_from_tracking_json:
-                                if key not in allBranches:
-                                    tracking = self.tracking.get(projectPath, None)
-                                    if tracking:
-                                        lastCommitDate = trackingDetails.get(key, {}).get('latestCommitDate', None)
-                                        lastCommitId = trackingDetails.get(key, {}).get('latestCommitId', None)
-                                        self.updateTrackingForBranchCreateDelete(trackingDetails, projectPath, key,
-                                                                                 lastCommitDate, lastCommitId)
-                                        tracking.pop(key)
-                        self.updateTrackingJson(self.tracking)
+                group = projectPath.split("/")
+                groupName = group[0]
+                subGroupName = group[1]
+                if group[0] in filterbyGroups:
+                    encodedProjectName = urllib.quote_plus(projectPath)
+                    if not os.path.isfile(self.trackingCachePath + projectPath + '.json'):
+                        self.updateTrackingCacheFile(projectPath, dict())
+                    projectTrackingCache = self.loadTrackingCacheFile(projectPath)
+                    projectDefaultBranch = project.get('default_branch', None)
+                    commitDict = dict()
+                    trackingDetails = self.tracking.get(projectPath, None)
+                    if trackingDetails is None:
+                        trackingDetails = {}
+                        self.tracking[projectPath] = trackingDetails
+                    projectUpdatedAt = project.get('last_activity_at', None)
+                    projectUpdatedAt = parser.parse(projectUpdatedAt, ignoretz=True)
+                    branch_from_tracking_json = []
+                    for key in trackingDetails:
+                        if key != "projectModificationTime":
+                            branch_from_tracking_json.append(key)
+                    if startFrom < projectUpdatedAt:
+                        trackingDetails['projectModificationTime'] = project.get('last_activity_at')
+                        branches = ['master']
+                        if projectDefaultBranch != 'master':
+                            branches.append(projectDefaultBranch)
+                        # Restricting projects with wrong branch names
+                        if projectName in restricted_projects:
+                            continue
 
-                        branchesFound = list()
-                        branchesNotFound = list()
-                        if 'mergeReqBranches' in projectTrackingCache:
-                            mergeReqBranches = projectTrackingCache['mergeReqBranches']
-                            for branch in branches:
-                                if branch in mergeReqBranches:
-                                    branchesFound.append(branch)
-                                else:
-                                    branchesNotFound.append(branch)
-                        orderedBranches = branchesFound + branchesNotFound                        
-                        injectData = dict()
-                        injectData['projectPath'] = projectPath
-                        injectData['projectName'] = projectName
-                        injectData['projectId'] = projectId
-                        injectData['gitType'] = 'commit'
-                        injectData['fromMergeReq'] = False
-                        for branch in orderedBranches:
-                            hasLatestMergeReq = False
-                            data = []
-                            orphanCommitIdList = list()                            
-                            if branch == projectDefaultBranch:
-                                injectData['default'] = True
-                            else:
-                                injectData['default'] = False
-                            
-                            parsedBranch = urllib.quote_plus(branch)                            
-                            fetchNextCommitsPage = True
-                            getCommitDetailsUrl = commitsBaseEndPoint + encodedProjectName + '/repository/commits?ref_name=' + parsedBranch + '&access_token=' + accessToken + '&per_page=100'
-                            branchTrackingDetails = trackingDetails.get(branch, {})
-                            since = branchTrackingDetails.get('latestCommitDate', None)
-                            if since:
-                                getCommitDetailsUrl += '&since=' + since
-                            commitsPageNum = 1
-                            latestCommit = None
-                            while fetchNextCommitsPage:
-                                try:
-                                    commits = self.getResponse(getCommitDetailsUrl + '&page=' + str(commitsPageNum),
-                                                               'GET', None, None, None)
-                                    if latestCommit is None and len(commits) > 0:
-                                        latestCommit = commits[0]
-                                    for commit in commits:
-                                        commitId = commit.get('id', None)
-                                        if since or startFrom < parser.parse(commit["committed_date"],
-                                                                             ignoretz=True):
-                                            if commitId not in commitDict:
-                                                injectData['consumptionTime'] = timeStampNow()
-                                                data += self.parseResponse(responseTemplate, commit, injectData)
-                                                commitDict[commitId] = False
-                                                orphanCommitIdList.append(commitId)
-                                            elif not commitDict.get(commitId, False):
-                                                orphanCommitIdList.append(commitId)
-                                        else:
-                                            fetchNextCommitsPage = False
-                                            self.updateTrackingForBranch(trackingDetails, branch, latestCommit,
-                                                                         projectDefaultBranch)
-                                            break
-                                    if len(commits) == 0 or len(data) == 0 or len(commits) < 100:
+                        if projectPath:
+                            if enableBranches:
+                                if isOptimalDataCollect:
+                                    self.retrieveMergeRequest(commitsBaseEndPoint, projectId, projectPath,
+                                                              encodedProjectName,
+                                                              projectDefaultBranch, accessToken,
+                                                              trackingDetails, projectTrackingCache, startFromStr,
+                                                              mergeReqMetaData,
+                                                              mergeReqResponseTemplate, commitsMetaData, responseTemplate)
+                                    if 'commitDict' in projectTrackingCache:
+                                        commitDict = projectTrackingCache['commitDict']
+                                branches = []
+                                allBranches = []
+                                branchPage = 1
+                                fetchNextBranchPage = True
+                                while fetchNextBranchPage:
+                                    getBranchesRestUrl = commitsBaseEndPoint + encodedProjectName + '/repository/branches?access_token=' + accessToken + '&page=' + str(
+                                        branchPage)
+                                    try:
+                                        branchDetails = self.getResponse(getBranchesRestUrl, 'GET', None, None, None)
+                                    except Exception as ex:
+                                        self.publishHealthDataForExceptions(ex)
+                                        branchDetails = []
+                                        pass
+
+                                    for branch in branchDetails:
+                                        branchName = branch['name']
+                                        branchName = urllib.quote_plus(branchName)
+                                        branchTrackingDetails = trackingDetails.get(branchName, {})
+                                        branchTracking = branchTrackingDetails.get('latestCommitId', None)
+                                        allBranches.append(branchName)
+                                        if branchTracking is None or branchTracking != branch.get('commit', {}).get('sha',
+                                                                                                                    None):
+                                            branches.append(branchName)
+                                    if len(branchDetails) == 30:
+                                        branchPage = branchPage + 1
+                                    else:
                                         break
-                                except Exception as ex:
-                                    fetchNextCommitsPage = False
-                                    logging.error(ex)
-                                commitsPageNum = commitsPageNum + 1
-                            if data or orphanCommitIdList:
-                                self.updateTrackingForBranch(trackingDetails, branch, latestCommit, projectDefaultBranch,
-                                                             isOptimalDataCollect, len(data), hasLatestMergeReq)
-                                self.publishToolsData(data, commitsMetaData)
-                                orphanBranch = {
-                                    'projectPath': projectPath,
-                                    'projectId': projectId,
-                                    'branch': branch,
-                                    'gitType': 'orphanBranch',
-                                    'commit': orphanCommitIdList,
-                                    'consumptionTime': timeStampNow()
-                                }
-                                self.publishToolsData([orphanBranch, ])
+                                if len(branches) > 0:
+                                    activeBranches = [
+                                        {'projectPath': projectPath, 'projectId': projectId, 'activeBranches': allBranches,
+                                         'gitType': 'metadata',
+                                         'consumptionTime': timeStampNow(), 'groupName': group[0],'subGroupName': group[1]}]
+                                    self.publishToolsData(activeBranches, branchesMetaData)
+                            if enableBrancheDeletion:
+                                for key in branch_from_tracking_json:
+                                    if key not in allBranches:
+                                        tracking = self.tracking.get(projectPath, None)
+                                        if tracking:
+                                            lastCommitDate = trackingDetails.get(key, {}).get('latestCommitDate', None)
+                                            lastCommitId = trackingDetails.get(key, {}).get('latestCommitId', None)
+                                            self.updateTrackingForBranchCreateDelete(trackingDetails, projectPath, key,
+                                                                                     lastCommitDate, lastCommitId)
+                                            tracking.pop(key)
                             self.updateTrackingJson(self.tracking)
-                            self.updateTrackingCacheFile(projectPath, projectTrackingCache)
-                        # tag method call
-                        self.retriveTags(trackingDetails, commitsBaseEndPoint, projectId, projectPath, encodedProjectName, accessToken)
+
+                            branchesFound = list()
+                            branchesNotFound = list()
+                            if 'mergeReqBranches' in projectTrackingCache:
+                                mergeReqBranches = projectTrackingCache['mergeReqBranches']
+                                for branch in branches:
+                                    if branch in mergeReqBranches:
+                                        branchesFound.append(branch)
+                                    else:
+                                        branchesNotFound.append(branch)
+                            orderedBranches = branchesFound + branchesNotFound
+                            injectData = dict()
+                            injectData['projectPath'] = projectPath
+                            injectData['subGroupName'] = subGroupName
+                            injectData['groupName'] = groupName
+                            injectData['projectName'] = projectName
+                            injectData['projectId'] = projectId
+                            injectData['gitType'] = 'commit'
+                            injectData['fromMergeReq'] = False
+                            for branch in orderedBranches:
+                                hasLatestMergeReq = False
+                                data = []
+                                orphanCommitIdList = list()
+                                if branch == projectDefaultBranch:
+                                    injectData['default'] = True
+                                else:
+                                    injectData['default'] = False
+
+                                parsedBranch = urllib.quote_plus(branch)
+                                fetchNextCommitsPage = True
+                                getCommitDetailsUrl = commitsBaseEndPoint + encodedProjectName + '/repository/commits?ref_name=' + parsedBranch + '&access_token=' + accessToken + '&per_page=100'
+                                branchTrackingDetails = trackingDetails.get(branch, {})
+                                since = branchTrackingDetails.get('latestCommitDate', None)
+                                if since:
+                                    getCommitDetailsUrl += '&since=' + since
+                                commitsPageNum = 1
+                                latestCommit = None
+                                while fetchNextCommitsPage:
+                                    try:
+                                        commits = self.getResponse(getCommitDetailsUrl + '&page=' + str(commitsPageNum),
+                                                                   'GET', None, None, None)
+                                        if latestCommit is None and len(commits) > 0:
+                                            latestCommit = commits[0]
+                                        for commit in commits:
+                                            commitId = commit.get('id', None)
+                                            if since or startFrom < parser.parse(commit["committed_date"],
+                                                                                 ignoretz=True):
+                                                if commitId not in commitDict:
+                                                    injectData['consumptionTime'] = timeStampNow()
+                                                    data += self.parseResponse(responseTemplate, commit, injectData)
+                                                    commitDict[commitId] = False
+                                                    orphanCommitIdList.append(commitId)
+                                                elif not commitDict.get(commitId, False):
+                                                    orphanCommitIdList.append(commitId)
+                                            else:
+                                                fetchNextCommitsPage = False
+                                                self.updateTrackingForBranch(trackingDetails, branch, latestCommit,
+                                                                             projectDefaultBranch)
+                                                break
+                                        if len(commits) == 0 or len(data) == 0 or len(commits) < 100:
+                                            break
+                                    except Exception as ex:
+                                        fetchNextCommitsPage = False
+                                        logging.error(ex)
+                                    commitsPageNum = commitsPageNum + 1
+                                if data or orphanCommitIdList:
+                                    self.updateTrackingForBranch(trackingDetails, branch, latestCommit,
+                                                                 projectDefaultBranch,
+                                                                 isOptimalDataCollect, len(data), hasLatestMergeReq)
+                                    self.publishToolsData(data, commitsMetaData)
+                                    orphanBranch = {
+                                        'projectPath': projectPath,
+										'groupName': group[0],
+										'subGroupName': group[1],
+                                        'projectId': projectId,
+                                        'branch': branch,
+                                        'gitType': 'orphanBranch',
+                                        'commit': orphanCommitIdList,
+                                        'consumptionTime': timeStampNow()
+                                    }
+                                    self.publishToolsData([orphanBranch, ])
+                                self.updateTrackingJson(self.tracking)
+                                self.updateTrackingCacheFile(projectPath, projectTrackingCache)
+                            # tag method call
+                            self.retriveTags(trackingDetails, commitsBaseEndPoint, projectId, projectPath,
+                                             encodedProjectName, accessToken)
             projectPageNum = projectPageNum + 1
             try:
-                projects = self.getResponse(getProjectsUrl + '&per_page=100&sort=asc&page=' + str(projectPageNum), 'GET', None, None,
-                                     None)
+                projects = self.getResponse(getProjectsUrl + '&per_page=100&sort=asc&page=' + str(projectPageNum),
+                                            'GET', None, None,
+                                            None)
             except Exception as ex:
                 self.publishHealthDataForExceptions(ex)
                 projects = []
                 pass
-                                     
 
-    def retriveTags(self, trackingDetails, commitsBaseEndPoint, projectId, projectPath, encodedProjectName, accessToken):
+    def retriveTags(self, trackingDetails, commitsBaseEndPoint, projectId, projectPath, encodedProjectName,
+                    accessToken):
         data = list()
         if 'tags' not in trackingDetails:
             tagsTrackingDict = dict()
@@ -253,13 +267,13 @@ class GitLabAgent(BaseAgent):
         getTagsRestUrl = commitsBaseEndPoint + encodedProjectName + '/repository/tags?private_token=' + accessToken + '&page=' + str(
             tagPage)
         try:
-            tags = self.getResponse(getTagsRestUrl, 'GET', None, None, None)  
+            tags = self.getResponse(getTagsRestUrl, 'GET', None, None, None)
         except Exception as ex:
             self.publishHealthDataForExceptions(ex)
             tags = []
-            #print("inside exception block>> ---tags length ---",len(tags) )
+            # print("inside exception block>> ---tags length ---",len(tags) )
             pass
-        
+
         while fetchNextTagPage:
             if len(tags) == 0:
                 fetchNextTagPage = False
@@ -271,6 +285,11 @@ class GitLabAgent(BaseAgent):
                     commitList = list()
                     injectData = dict()
                     injectData['projectPath'] = projectPath
+                    group = projectPath.split("/")
+                    groupName = group[0]
+                    subGroupName = group[1]
+                    injectData['subGroupName'] = subGroupName
+                    injectData['groupName'] = groupName
                     injectData['projectId'] = projectId
                     injectData['tagSha'] = tagSha
                     injectData['tagName'] = tagName
@@ -304,36 +323,42 @@ class GitLabAgent(BaseAgent):
             tagPage += 1
             getTagsRestUrl = commitsBaseEndPoint + encodedProjectName + '/repository/tags?private_token=' + accessToken + '&page=' + str(
                 tagPage)
-            try:    
+            try:
                 tags = self.getResponse(getTagsRestUrl, 'GET', None, None, None)
             except Exception as ex:
                 self.publishHealthDataForExceptions(ex)
                 tags = []
-                #print("inside exception block>> ---tags length ---",len(tags) )
-                pass  
+                # print("inside exception block>> ---tags length ---",len(tags) )
+                pass
         if data:
             tagMetadata = {"dataUpdateSupported": True, "uniqueKey": ["projectPath", "tagName"]}
             self.publishToolsData(data, tagMetadata)
             self.updateTrackingJson(self.tracking)
 
-    def retrieveMergeRequest(self, projectEndPoint, projectId, projectPath, encodedProjectName, defaultBranch, accessToken, trackingDetails,
-                            trackingCache,
-                            startFrom, metaData, responseTemplate, commitMetaData, commitsResponseTemplate):
+    def retrieveMergeRequest(self, projectEndPoint, projectId, projectPath, encodedProjectName, defaultBranch,
+                             accessToken, trackingDetails,
+                             trackingCache,
+                             startFrom, metaData, responseTemplate, commitMetaData, commitsResponseTemplate):
         timeStampNow = lambda: dateTime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         injectData = dict()
         mergeReqData = list()
         commitData = list()
         branchesDict = dict()
         injectData['projectPath'] = projectPath
+        group = projectPath.split("/")
+        groupName = group[0]
+        subGroupName = group[1]
+        injectData['subGroupName'] = subGroupName
+        injectData['groupName'] = groupName
         injectData['projectId'] = projectId
         injectData['fromMergeReq'] = True
         injectData['gitType'] = 'commit'
         defaultParams = 'access_token=%s' % accessToken + '&per_page=100&page={}'
         lastTrackedTimeStr = trackingDetails.get('mergeReqModificationTime', startFrom)
         lastTrackedTime = parser.parse(lastTrackedTimeStr, ignoretz=True)
-        #print("-----mergeReqEndPoint-----------")
+        # print("-----mergeReqEndPoint-----------")
         mergeReqEndPoint = projectEndPoint + encodedProjectName + '/merge_requests'
-        #print(mergeReqEndPoint)
+        # print(mergeReqEndPoint)
         mergeReqUrl = mergeReqEndPoint + '?state=all&sort=desc&order_by=updated_at&updated_after=%s&' % lastTrackedTimeStr
         mergeReqUrl += defaultParams
         if 'commitDict' not in trackingCache:
@@ -344,13 +369,13 @@ class GitLabAgent(BaseAgent):
         mergeReqPage = 1
         nextMergeReqPage = True
         isLatestMergeReqDateSet = False
-        #print("------------before mergeReqUrl------------------")
-        #print(mergeReqUrl)
+        # print("------------before mergeReqUrl------------------")
+        # print(mergeReqUrl)
         while nextMergeReqPage:
             mergeReqDetails = list()
             try:
                 mergeReqDetails = self.getResponse(mergeReqUrl.format(mergeReqPage), 'GET', None, None, None)
-                #print("---after rest call-----------",mergeReqUrl)
+                # print("---after rest call-----------",mergeReqUrl)
                 if mergeReqDetails and not isLatestMergeReqDateSet:
                     mergeReqLatestModifiedTime = mergeReqDetails[0].get('updated_at', None)
                     trackingDetails['mergeReqModificationTime'] = mergeReqLatestModifiedTime
@@ -358,7 +383,7 @@ class GitLabAgent(BaseAgent):
             except Exception as ex:
                 self.publishHealthDataForExceptions(ex)
                 mergeReqDetails = []
-                #print("inside exception block>> ---mergeReqDetails length ---",len(mergeReqDetails) )
+                # print("inside exception block>> ---mergeReqDetails length ---",len(mergeReqDetails) )
                 pass
             for mergeReq in mergeReqDetails:
                 commitList = list()
@@ -385,18 +410,18 @@ class GitLabAgent(BaseAgent):
                 nextMergeReqCommitPage = True
                 while nextMergeReqCommitPage:
                     getMergeReqCommitUrl = baseMergeReqCommitUrl.format(commitPage)
-                    commitDetails = list()                    
+                    commitDetails = list()
                     try:
                         commitDetails = self.getResponse(getMergeReqCommitUrl, 'GET', None, None, None)
-                        #print("-------------getMergeReqCommitUrl-----------",getMergeReqCommitUrl)
-                        #print("----commitDetails----",commitDetails)
+                        # print("-------------getMergeReqCommitUrl-----------",getMergeReqCommitUrl)
+                        # print("----commitDetails----",commitDetails)
                         if commitDetails:
                             latestCommit = commitDetails[-1]
-                            #print("----latestCommit----",latestCommit)
+                            # print("----latestCommit----",latestCommit)
                     except Exception as ex:
                         self.publishHealthDataForExceptions(ex)
                         commitDetails = []
-                        #print("inside exception block>> ---commitDetails length ---",len(commitDetails) )
+                        # print("inside exception block>> ---commitDetails length ---",len(commitDetails) )
                         pass
                     for commit in commitDetails:
                         commitId = commit.get('id', '')
@@ -421,10 +446,10 @@ class GitLabAgent(BaseAgent):
                         latestCommitTimeStr = latestCommit.get('committed_date', None)
                         if lastTrackedTimeStr:
                             if 'latestMergeReqCommitTime' in originTrackingDetails and lastTrackedTimeStr:
-                                #print("-------latestCommitTimeStr-------",latestCommitTimeStr)
+                                # print("-------latestCommitTimeStr-------",latestCommitTimeStr)
                                 latestCommitTime = parser.parse(latestCommitTimeStr, ignoretz=True)
                                 lastCommitTimeStr = originTrackingDetails.get('latestMergeReqCommitTime', None)
-                                #print("-------lastCommitTimeStr-------",lastCommitTimeStr)
+                                # print("-------lastCommitTimeStr-------",lastCommitTimeStr)
                                 lastCommitTime = parser.parse(lastCommitTimeStr, ignoretz=True)
                                 if lastCommitTime < latestCommitTime:
                                     originTrackingDetails['latestMergeReqCommitTime'] = latestCommitTimeStr
@@ -437,14 +462,16 @@ class GitLabAgent(BaseAgent):
                         baseBranches = set(originTrackingDetails.get('baseBranches', []))
                         baseBranches.add(baseBranch)
                         originTrackingDetails['baseBranches'] = list(baseBranches)
-                        originTrackingDetails['totalMergeReqCommits'] = originTrackingDetails.get('totalMergeReqCommits',
-                                                                                                 0) + len(commitList)
+                        originTrackingDetails['totalMergeReqCommits'] = originTrackingDetails.get(
+                            'totalMergeReqCommits',
+                            0) + len(commitList)
                     except Exception as err:
                         logging.error(err)
                 if commitList:
                     mergeReqData += self.parseResponse(responseTemplate, mergeReq,
-                                                      {'projectPath': projectPath,'projectId': projectId, 'gitType': 'mergeRequest',
-                                                       'consumptionTime': timeStampNow()})
+                                                       {'projectPath': projectPath, 'projectId': projectId,
+                                                        'gitType': 'mergeRequest',
+                                                        'consumptionTime': timeStampNow(),'groupName': group[0], 'subGroupName': group[1]})
                     commitData += commitList
             if len(mergeReqDetails) < 100:
                 nextMergeReqPage = False
@@ -504,17 +531,24 @@ class GitLabAgent(BaseAgent):
             elif hasLatestMergeReq:
                 branchTrackingDetails['commitCount'] = totalCommit
 
-    def updateTrackingForBranchCreateDelete(self, trackingDetails, projectPath, branchName, lastCommitDate, lastCommitId):
+    def updateTrackingForBranchCreateDelete(self, trackingDetails, projectPath, branchName, lastCommitDate,
+                                            lastCommitId):
         trackingDetails = self.tracking.get(projectPath, None)
         data_branch_delete = []
         branch_delete = dict()
         branch_delete['branchName'] = branchName
         branch_delete['projectPath'] = projectPath
+        group = projectPath.split("/")
+        groupName = group[0]
+        subGroupName = group[1]
+        branch_delete['subGroupName'] = subGroupName
+        branch_delete['groupName'] = groupName
         branch_delete['event'] = "branchDeletion"
         # branch_delete['lastCommitDate'] = lastCommitDate
         # branch_delete['lastCommitId'] = lastCommitId
         data_branch_delete.append(branch_delete)
-        branchMetadata = {"labels": ["METADATA"], "dataUpdateSupported": True, "uniqueKey": ["projectPath", "branchName"]}
+        branchMetadata = {"labels": ["METADATA"], "dataUpdateSupported": True,
+                          "uniqueKey": ["projectPath", "branchName"]}
         self.publishToolsData(data_branch_delete, branchMetadata)
 
 
