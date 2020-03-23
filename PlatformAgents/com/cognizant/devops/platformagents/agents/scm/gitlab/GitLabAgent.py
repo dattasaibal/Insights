@@ -106,7 +106,7 @@ class GitLabAgent(BaseAgent):
                         if projectPath:
                             if enableBranches:
                                 if isOptimalDataCollect:
-                                    self.retrieveMergeRequest(commitsBaseEndPoint, projectId, projectPath,
+                                    self.retrieveMergeRequest(commitsBaseEndPoint, projectId, projectPath,projectName,
                                                               encodedProjectName,
                                                               projectDefaultBranch, accessToken,
                                                               trackingDetails, projectTrackingCache, startFromStr,
@@ -242,7 +242,7 @@ class GitLabAgent(BaseAgent):
                                 self.updateTrackingJson(self.tracking)
                                 self.updateTrackingCacheFile(projectPath, projectTrackingCache)
                             # tag method call
-                            self.retriveTags(trackingDetails, commitsBaseEndPoint, projectId, projectPath,
+                            self.retriveTags(trackingDetails, commitsBaseEndPoint, projectId, projectPath,projectName,
                                              encodedProjectName, accessToken)
             projectPageNum = projectPageNum + 1
             try:
@@ -254,7 +254,7 @@ class GitLabAgent(BaseAgent):
                 projects = []
                 pass
 
-    def retriveTags(self, trackingDetails, commitsBaseEndPoint, projectId, projectPath, encodedProjectName,
+    def retriveTags(self, trackingDetails, commitsBaseEndPoint, projectId, projectPath,projectName, encodedProjectName,
                     accessToken):
         data = list()
         if 'tags' not in trackingDetails:
@@ -285,6 +285,7 @@ class GitLabAgent(BaseAgent):
                     commitList = list()
                     injectData = dict()
                     injectData['projectPath'] = projectPath
+                    injectData['projectName'] = projectName
                     group = projectPath.split("/")
                     groupName = group[0]
                     subGroupName = group[1]
@@ -335,7 +336,7 @@ class GitLabAgent(BaseAgent):
             self.publishToolsData(data, tagMetadata)
             self.updateTrackingJson(self.tracking)
 
-    def retrieveMergeRequest(self, projectEndPoint, projectId, projectPath, encodedProjectName, defaultBranch,
+    def retrieveMergeRequest(self, projectEndPoint, projectId, projectPath,projectName, encodedProjectName, defaultBranch,
                              accessToken, trackingDetails,
                              trackingCache,
                              startFrom, metaData, responseTemplate, commitMetaData, commitsResponseTemplate):
@@ -345,6 +346,7 @@ class GitLabAgent(BaseAgent):
         commitData = list()
         branchesDict = dict()
         injectData['projectPath'] = projectPath
+        injectData['projectName'] = projectName
         group = projectPath.split("/")
         groupName = group[0]
         subGroupName = group[1]
@@ -531,13 +533,14 @@ class GitLabAgent(BaseAgent):
             elif hasLatestMergeReq:
                 branchTrackingDetails['commitCount'] = totalCommit
 
-    def updateTrackingForBranchCreateDelete(self, trackingDetails, projectPath, branchName, lastCommitDate,
+    def updateTrackingForBranchCreateDelete(self, trackingDetails, projectPath,projectName, branchName, lastCommitDate,
                                             lastCommitId):
         trackingDetails = self.tracking.get(projectPath, None)
         data_branch_delete = []
         branch_delete = dict()
         branch_delete['branchName'] = branchName
         branch_delete['projectPath'] = projectPath
+        branch_delete['projectName'] = projectName
         group = projectPath.split("/")
         groupName = group[0]
         subGroupName = group[1]
