@@ -44,7 +44,7 @@ class GitLabAgent(BaseAgent):
         restricted_projects = self.config.get('dynamicTemplate', {}).get('restrictedProjects', None)
         isOptimalDataCollect = self.config.get("enableOptimizedDataRetrieval", False)
         enableBrancheDeletion = self.config.get("enableBrancheDeletion", False)
-        filterbyGroups = self.config.get("filterbyGroups", '')
+        filterbyGroups = ["testProject"]
         self.setupTrackingCachePath('trackingCache')
         try:
             projects = self.getResponse(getProjectsUrl + '&per_page=100&sort=asc&page=1', 'GET', None, None, None)
@@ -143,7 +143,7 @@ class GitLabAgent(BaseAgent):
                                         break
                                 if len(branches) > 0:
                                     activeBranches = [
-                                        {'projectPath': projectPath, 'projectId': projectId, 'activeBranches': allBranches,
+                                        {'projectPath': projectPath,'projectName': projectName, 'projectId': projectId, 'activeBranches': allBranches,
                                          'gitType': 'metadata',
                                          'consumptionTime': timeStampNow(), 'groupName': group[0],'subGroupName': group[1]}]
                                     self.publishToolsData(activeBranches, branchesMetaData)
@@ -154,7 +154,7 @@ class GitLabAgent(BaseAgent):
                                         if tracking:
                                             lastCommitDate = trackingDetails.get(key, {}).get('latestCommitDate', None)
                                             lastCommitId = trackingDetails.get(key, {}).get('latestCommitId', None)
-                                            self.updateTrackingForBranchCreateDelete(trackingDetails, projectPath, key,
+                                            self.updateTrackingForBranchCreateDelete(trackingDetails, projectPath,projectName, key,
                                                                                      lastCommitDate, lastCommitId)
                                             tracking.pop(key)
                             self.updateTrackingJson(self.tracking)
@@ -230,8 +230,9 @@ class GitLabAgent(BaseAgent):
                                     self.publishToolsData(data, commitsMetaData)
                                     orphanBranch = {
                                         'projectPath': projectPath,
-										'groupName': group[0],
-										'subGroupName': group[1],
+                                                                                'projectName': projectName,
+                                                                                'groupName': group[0],
+                                                                                'subGroupName': group[1],
                                         'projectId': projectId,
                                         'branch': branch,
                                         'gitType': 'orphanBranch',
@@ -471,7 +472,7 @@ class GitLabAgent(BaseAgent):
                         logging.error(err)
                 if commitList:
                     mergeReqData += self.parseResponse(responseTemplate, mergeReq,
-                                                       {'projectPath': projectPath, 'projectId': projectId,
+                                                       {'projectPath': projectPath, 'projectName': projectName, 'projectId': projectId,
                                                         'gitType': 'mergeRequest',
                                                         'consumptionTime': timeStampNow(),'groupName': group[0], 'subGroupName': group[1]})
                     commitData += commitList
