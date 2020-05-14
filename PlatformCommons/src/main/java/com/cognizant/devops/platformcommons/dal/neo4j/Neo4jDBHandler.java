@@ -100,6 +100,24 @@ public class Neo4jDBHandler {
 		return buildResponseJson(response);
 	}
 
+	public JsonObject createNodesWithSingleData(JsonObject data, String cypherQuery)
+			throws GraphDBException {
+		if (data == null || cypherQuery == null || cypherQuery.trim().length() == 0) {
+			return new JsonObject();
+		}
+
+		JsonObject statement = getCreateCypherQueryStatement(data, cypherQuery);
+		JsonObject requestJson = new JsonObject();
+		JsonArray statementArray = new JsonArray();
+		statementArray.add(statement);
+		requestJson.add("statements", statementArray);
+		ClientResponse response = doCommitCall(requestJson);
+		if (response.getStatus() != 200) {
+			throw new GraphDBException(response);
+		}
+		return buildResponseJson(response);
+	}
+
 	public JsonObject bulkCreateCorrelations(List<String> correlationCyphers) throws GraphDBException {
 		JsonArray statementArray = new JsonArray();
 		for (String cypherQuery : correlationCyphers) {

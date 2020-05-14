@@ -100,7 +100,9 @@
 		"relayStateUrl" : "relayStateUrl",
 		"defaultTargetUrl" : "defaultTargetUrl",
 		"postLogoutURL" : "logoutURL",
-		"tokenSigningKey":"insights_IDP_CogDevops_SSO_Token_string"
+		"tokenSigningKey":"insights_IDP_CogDevops_SSO_Token_string",
+		"servicePrincipalKerberos":"",
+		"keyTabLocationKerberos":"C:\\InSights_Windows\\Server2\\INSIGHTS_HOME\\.InSights\\kerberos_keytab_file.keytab"
 	},
 	"insightsServiceURL": "http://localhost:8080",
 	"insightsTimeZone": "Asia/Kolkata",
@@ -111,7 +113,7 @@
 	"enableAuditEngine" : true,
 	"enableWebHookEngine" : true,
 	"enableOnlineBackup": false,
-	"enableSSO": false,
+	"autheticationProtocol":"NativeGrafana",
 	"trustedHosts": [
     	"localhost", "hostip"
   	],
